@@ -9,7 +9,6 @@ This has been tested and works in the following browsers: Safari, Firefox and Ch
 
 NOTE
 ====
-If the java plugin already works in Safari when you click on a web applet, using this script will break that functionality.
-However, each time this script is run a copy of the original java plugin will be saved in /Library/Internet\ Plug-Ins/disabled/
+If the java plugin already works in Safari this script will break that functionality. However, each time this script is run a copy of the original java plugin will be saved in /Library/Internet\ Plug-Ins/disabled/
 
 
