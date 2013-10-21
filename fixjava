@@ -1,0 +1,62 @@
+#!/bin/bash
+# Author: Cody Lane
+# Date: 07-17-20313
+# 
+# A neat little script to fix the web-browser plugin in OSX.
+
+err() {
+    echo "ERR $* exiting"
+    exit 1
+}
+
+is_java_installed() {
+    JAVA=$(which java)
+    [ -z "$JAVA" ] && return 0
+    return 1
+}
+
+java_16_fixes() {
+    [ -L "/usr/bin/javaws" ] && unlink /usr/bin/javaws
+
+    cd /Library/Internet\ Plug-Ins/
+    [ ! -d "disabled" ] && mkdir disabled
+    [ -d "JavaAppletPlugin.plugin" ] && mv JavaAppletPlugin.plugin disabled/
+
+
+    [ -L "JavaPlugin2_NPAPI.plugin" ] && unlink "JavaPlugin2_NPAPI.plugin"
+    ln -s /System/Library/Java/Support/Deploy.bundle/Contents/Resources/JavaPlugin2_NPAPI.plugin
+}
+
+java_17_fixes() {
+    cp /usr/bin/javaws /usr/bin/javaws.old.$(date +%Y%m%d.$$)
+    cat > /usr/bin/javaws << EOF
+#!/bin/sh
+/Library/Internet\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/javaws "\$@"
+EOF
+    chmod 755 /usr/bin/javaws
+
+    cd /Library/Internet\ Plug-Ins/
+    [ -L "JavaPlugin2_NPAPI.plugin" ] && unlink "JavaPlugin2_NPAPI.plugin"
+}
+
+is_java_installed && err "Java doesn't appear to be installed on your system, please do so and then re-run this script"
+
+# determine java version
+VERSION=$($JAVA -version 2>&1 | grep version | awk '{print $3}' | sed -e "s/\"//g")
+
+[ -z "$VERSION" ] && err "Unable to determine java version, unable to continue"
+
+WHOAMI=$(whoami)
+[ "$WHOAMI" != "root" ] && err "You need to run this command as root"
+
+case "$VERSION" in
+    1.6*)
+        java_16_fixes
+        ;;
+    1.7*)
+        java_17_fixes
+        ;;
+    *)
+        err "Sorry, but java version '$VERSION' is not currently supported"
+        ;;
+esac
