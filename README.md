@@ -12,3 +12,22 @@ NOTE
 If the java plugin already works in Safari this script will break that functionality. However, each time this script is run a copy of the original java plugin will be saved in /Library/Internet\ Plug-Ins/disabled/
 
 
+USAGE
+=====
+To force manual version, you can do the following:
+
+Java 1.6
+========
+fixjava 1.6
+
+Java 1.7
+========
+fixjava 1.7
+
+Apple Java
+==========
+fixjava apple-java
+
+Show Program Usage
+==================
+fixjava help
