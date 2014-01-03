@@ -62,7 +62,7 @@ backup_old_java() {
     fi
 
     # remove the old cache directories for all users on the system
-    CACHE_DIRS=$(sudo find /Users -name "Java" -type d | grep Caches)
+    CACHE_DIRS=$(find /Users -name "Java" -type d | grep Caches)
     for CACHE_DIR in $CACHE_DIRS
     do
         echo "Removing cache directory: $CACHE_DIR"
