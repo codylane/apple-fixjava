@@ -3,6 +3,14 @@
 # Date: 07-17-20313
 # 
 # A neat little script to fix the web-browser plugin in OSX.
+# I know it is poorly written, time is limited. :)
+# Please file bugs if you have problems.
+
+# GLOBAL VARIABLES
+APPLE_JAVA_PLUGIN_DIR="/System/Library/Java/Support/Deploy.bundle/Contents/Resources/JavaPlugin2_NPAPI.plugin"
+JAVA_PLUGIN="JavaAppletPlugin.plugin"
+
+NPAPI_PLUGIN="JavaPlugin2_NPAPI.plugin"
 
 err() {
     echo "ERR $* exiting"
@@ -15,35 +23,110 @@ is_java_installed() {
     return 1
 }
 
-java_16_fixes() {
-    [ -L "/usr/bin/javaws" ] && unlink /usr/bin/javaws
+get_now() {
+    echo $(date +%Y%m%d%H%M%S)
+}
 
+backup_old_java() {
+    backup_old_java
     cd /Library/Internet\ Plug-Ins/
-    [ ! -d "disabled" ] && mkdir disabled
-    [ -d "JavaAppletPlugin.plugin" ] && mv JavaAppletPlugin.plugin disabled/
 
+    [ ! -d disabled ] && mkdir disabled
 
-    [ -L "JavaPlugin2_NPAPI.plugin" ] && unlink "JavaPlugin2_NPAPI.plugin"
-    ln -s /System/Library/Java/Support/Deploy.bundle/Contents/Resources/JavaPlugin2_NPAPI.plugin
+    if [ -L "$JAVA_PLUGIN" ]; then
+        PLUGIN_SOURCE=$(readlink $JAVA_PLUGIN)
+        ln -sf ${PLUGIN_SOURCE} disabled/${JAVA_PLUGIN}.$(get_now)
+
+        # unlink the old, get the source directory, 
+        unlink "$JAVA_PLUGIN"
+    elif [ -d "$JAVA_PLUGIN" ]; then
+        mv "$JAVA_PLUGIN" "distabled/${JAVA_PLUGIN}.$(get_now)"
+    elif [ -L "$NPAPI_PLUGIN" ]; then
+        PLUGIN_SOURCE=$(readlink $NPAPI_PLUGIN)
+        ln -sf ${PLUGIN_SOURCE} disabled/${JAVA_PLUGIN}.$(get_now)
+
+        # unlink the old, get the source directory, 
+        unlink "$NPAPI_PLUGIN"
+    fi
+
+    if [ -L /usr/bin/javaws ]; then
+        JAVAWS_SOURCE=$(readlink /usr/bin/javaws)
+        ln -sf /usr/bin/javaws.$(get_now)
+    elif [ -f /usr/bin/javaws ]; then
+        cp /usr/bin/javaws /usr/bin/javaws.$(get_now)
+    fi
+
+}   
+
+java_16_fixes() {
+    backup_old_java
+    cd /Library/Internet\ Plug-Ins/
+
+    ln -sf $APPLE_JAVA_PLUGIN_DIR "$NPAPI_PLUGIN"
 }
 
 java_17_fixes() {
-    cp /usr/bin/javaws /usr/bin/javaws.old.$(date +%Y%m%d.$$)
-    cat > /usr/bin/javaws << EOF
-#!/bin/sh
-/Library/Internet\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/javaws "\$@"
-EOF
-    chmod 755 /usr/bin/javaws
-
+    backup_old_java
     cd /Library/Internet\ Plug-Ins/
-    [ -L "JavaPlugin2_NPAPI.plugin" ] && unlink "JavaPlugin2_NPAPI.plugin"
+
+    # prefer oracle java
+    if [ -d "/Library/Application Support/Oracle/Java" ]; then
+        ln -sf /Library/Internet Plug-Ins/$JAVA_PLUGIN/Contents/Home/bin/javaws /usr/bin/javaws
+    elif [ -f /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws ]; then
+        ln -sf /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws /usr/bin/javaws
+    fi
 }
+
+use_apple_java() {
+    backup_old_java
+    cd /Library/Internet\ Plug-Ins/
+
+    # relink java plugin
+    [ ! -d "$APPLE_JAVA_PLUGIN_DIR" ] && err "Apple java doesn't appear to be installed, because this directory '$APPLE_JAVA_PLUGIN_DIR' doesn't exist"
+    ln -sf "$APPLE_JAVA_PLUGIN_DIR" "$JAVA_PLUGIN"
+
+    if [ -L /System/Library/Frameworks/JavaVM.framework/Commands/javaws ]; then
+        ln -sf /System/Library/Frameworks/JavaVM.framework/Commands/javaws /usr/bin/javaws
+    elif [ -f /System/Library/Java/Support/Deploy.bundle/Contents/MacOS/javaws ]; then
+        ln -sf /System/Library/Java/Support/Deploy.bundle/Contents/MacOS/javaws /usr/bin/javaws
+    else
+        err "Apple java doesn't appear to be installed"
+    fi
+}
+
+usage() {
+    CMD="${0##*/}"
+    echo "USAGE: ${CMD} <version>" 
+    echo ""
+    echo "To use apple-java: ${CMD} apple-java"
+    echo "To force it to use 1.7, if installed: ${CMD} 1.7"
+    echo "To force it to use 1.6, if installed: ${CMD} 1.6"
+    echo ""
+    echo "Otherwise, if java is installed on your machine, it will"
+    echo "try to automatically determine the version and hopefully"
+    echo "fix your java environment"
+
+    exit 0
+}
+
+## main ##
 
 is_java_installed && err "Java doesn't appear to be installed on your system, please do so and then re-run this script"
 
-# determine java version
-VERSION=$($JAVA -version 2>&1 | grep version | awk '{print $3}' | sed -e "s/\"//g")
+# use command line java version
+if [ -n "$1" ]; then 
+    case $1 in
+        usage|help|--help|-h)
+            usage
+            ;;
+        *)
+            VERSION="$1"
+            ;;
+    esac
+fi
 
+# determine java version automatically
+[ -z "$VERSION" ] && VERSION=$($JAVA -version 2>&1 | grep version | awk '{print $3}' | sed -e "s/\"//g")
 [ -z "$VERSION" ] && err "Unable to determine java version, unable to continue"
 
 WHOAMI=$(whoami)
@@ -55,6 +138,9 @@ case "$VERSION" in
         ;;
     1.7*)
         java_17_fixes
+        ;;
+    apple-java)
+        use_apple_java
         ;;
     *)
         err "Sorry, but java version '$VERSION' is not currently supported"
