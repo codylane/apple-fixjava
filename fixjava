@@ -17,6 +17,11 @@ err() {
     exit 1
 }
 
+get_java_version() {
+    ## java version "1.7.0_45"
+    echo $(java -version 2>&1 | grep 'version' | awk '{print $3}' | sed -e 's/"//g')
+}
+
 is_java_installed() {
     JAVA=$(which java)
     [ -z "$JAVA" ] && return 0
@@ -55,6 +60,13 @@ backup_old_java() {
     elif [ -f /usr/bin/javaws ]; then
         cp /usr/bin/javaws /usr/bin/javaws.$(get_now)
     fi
+
+    # remove the old cache directories for all users on the system
+    CACHE_DIRS=$(sudo find /Users -name "Java" -type d | grep Caches)
+    for CACHE_DIR in $CACHE_DIRS
+    do
+        echo "Removing cache directory: $CACHE_DIR"
+    done
 
 }   
 
@@ -98,6 +110,10 @@ usage() {
     CMD="${0##*/}"
     echo "USAGE: ${CMD} <version>" 
     echo ""
+    echo "[validation]"
+    echo "To validate the version of java you expect vs what is installed run: $CMD validate"
+    echo ""
+    echo "[version]"
     echo "To use apple-java: ${CMD} apple-java"
     echo "To force it to use 1.7, if installed: ${CMD} 1.7"
     echo "To force it to use 1.6, if installed: ${CMD} 1.6"
@@ -109,27 +125,94 @@ usage() {
     exit 0
 }
 
+validate_java() {
+    local CURR_JAVA_VERSION=$(get_java_version)
+
+    ## 1.7.0_45 -> 1.7
+    local EXPECTED_JAVA_VERSION=${CURR_JAVA_VERSION%.*}
+
+    [ -z "$EXPECTED_JAVA_VERSION" ] && err "Unable to determine current version of java on your computer, got '$EXPECTED_JAVA_VERSION'"
+
+    # test java version
+    [ "$VERSION" == "apple-java" ] && VERSION="1.6"
+    [ "$VERSION" != "$EXPECTED_JAVA_VERSION" ] && err "Expected version '$VERSION' should match '$EXPECTED_JAVA_VERSION'"
+
+
+    cd /Library/Internet\ Plug-Ins/
+
+    case $VERSION in
+        1.6*)
+            [ ! -L "$NPAPI_PLUGIN" ] && err "Expected link name to be '$NPAPI_PLUGIN' to be in $(pwd)"
+            echo "OK: $NPAPI_PLUGIN is a link"
+
+            LINK_SRC=$(readlink "$NPAPI_PLUGIN")
+            [ -z "$LINK_SRC" ] && err "Expected java plugin '$NPAPI_PLUGIN' to be in $(pwd)"
+
+            [ "$LINK_SRC" != "$APPLE_JAVA_PLUGIN_DIR" ] && err "Expected link source -> '$APPLE_JAVA_PLUGIN_DIR' not '$LINK_SRC'"
+            echo "OK: $LINK_SRC -> $APPLE_JAVA_PLUGIN_DIR"
+            ;;
+
+        1.7*)
+            [ -L "$NPAPI_PLUGIN" ] && err "Expected plugin '$NPAPI_PLUGIN' to not be a link be in $(pwd)"
+            echo "OK: $NPAPI_PLUGIN is not a link"
+
+            JAVAWS_SRC=$(readlink /usr/bin/javaws)
+            if [ "$JAVAWS_SRC" == "/Library/Internet\ Plug-Ins/$JAVA_PLUGIN/Contents/Home/bin/javaws" ]; then
+                echo "OK: /usr/bin/javaws link -> /Library/Internet\ Plug-Ins/$JAVA_PLUGIN/Contents/Home/bin/javaws" 
+            elif [ "$JAVAWS_SRC" == "/System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws" ]; then
+                echo "OK: /usr/bin/javaws link -> /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws"
+            else
+                err "Expected /usr/bin/javaws -> '/Library/Internet\ Plug-Ins/$JAVA_PLUGIN/Contents/Home/bin/javaws' or '/System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws', not '$JAVAWS_SRC'"
+            fi
+
+            ;;
+    esac
+
+    exit 0
+}
+
 ## main ##
+export VERSION
 
 is_java_installed && err "Java doesn't appear to be installed on your system, please do so and then re-run this script"
 
+# determine java version automatically
+[ -z "$VERSION" ] && VERSION=$(get_java_version | cut -d"." -f1-2)
+[ -z "$VERSION" ] && err "Unable to determine java version, unable to continue"
+
 # use command line java version
-if [ -n "$1" ]; then 
-    case $1 in
+while [ -n "#{1%%*-}" ]
+do
+
+    OPT="$1"
+    shift 
+
+    [ -z "$OPT" ] && break
+
+    case "$OPT" in
         usage|help|--help|-h)
             usage
             ;;
+        validate)
+            VALIDATE_JAVA="1"
+            ;;
         *)
-            VERSION="$1"
+            VERSION="$OPT"
             ;;
     esac
-fi
 
-# determine java version automatically
-[ -z "$VERSION" ] && VERSION=$($JAVA -version 2>&1 | grep version | awk '{print $3}' | sed -e "s/\"//g")
-[ -z "$VERSION" ] && err "Unable to determine java version, unable to continue"
+done
+
+#echo "[DEBUG]:"
+#echo " VALIDATE_JAVA=$VALIDATE_JAVA"
+#echo " VERSION=$VERSION"
+#echo 
+
+# validate the java version and exit
+[ -n "$VALIDATE_JAVA" ] && [ -n "$VERSION" ] && validate_java
 
 WHOAMI=$(whoami)
+
 [ "$WHOAMI" != "root" ] && err "You need to run this command as root"
 
 case "$VERSION" in
@@ -140,9 +223,11 @@ case "$VERSION" in
         java_17_fixes
         ;;
     apple-java)
+        VERSION="1.6"
         use_apple_java
-        ;;
+      ;;
     *)
         err "Sorry, but java version '$VERSION' is not currently supported"
         ;;
 esac
+
