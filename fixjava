@@ -28,7 +28,6 @@ get_now() {
 }
 
 backup_old_java() {
-    backup_old_java
     cd /Library/Internet\ Plug-Ins/
 
     [ ! -d disabled ] && mkdir disabled
@@ -71,7 +70,7 @@ java_17_fixes() {
 
     # prefer oracle java
     if [ -d "/Library/Application Support/Oracle/Java" ]; then
-        ln -sf /Library/Internet Plug-Ins/$JAVA_PLUGIN/Contents/Home/bin/javaws /usr/bin/javaws
+        ln -sf /Library/Internet\ Plug-Ins/$JAVA_PLUGIN/Contents/Home/bin/javaws /usr/bin/javaws
     elif [ -f /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws ]; then
         ln -sf /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws /usr/bin/javaws
     fi
