@@ -48,6 +48,7 @@ backup_old_java() {
         unlink "$NPAPI_PLUGIN"
     fi
 
+    cd /usr/bin
     if [ -L /usr/bin/javaws ]; then
         JAVAWS_SOURCE=$(readlink /usr/bin/javaws)
         ln -sf /usr/bin/javaws.$(get_now)
