@@ -87,6 +87,8 @@ java_17_fixes() {
     elif [ -f /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws ]; then
         ln -sf /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands/javaws /usr/bin/javaws
     fi
+
+    sudo ln -sf /System/Library/Frameworks/JavaVM.framework/Versions/Current/Resources/Deploy.bundle/Contents/Resources/JavaPlugin2_NPAPI.plugin /Library/Internet\ Plug-Ins/
 }
 
 use_apple_java() {
